@@ -11,6 +11,7 @@ struct UserSessionContext {
     std::string sessionId;
     std::string interactionAgentId;
     uint64_t generation;
+    bool usesDisplaySession = false;
 
     bool operator==(const UserSessionContext&) const = default;
 };

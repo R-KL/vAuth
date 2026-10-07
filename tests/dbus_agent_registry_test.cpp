@@ -176,6 +176,50 @@ bool test_invalid_identity_rejected() {
     return true;
 }
 
+bool test_display_binding_and_stale_invalidation() {
+    vauth::dbus::AgentRegistry registry;
+    vauth::dbus::InteractionRegistry interactions;
+    auto display_peer = peer();
+    display_peer.usesDisplaySession = true;
+    const auto first = registry.register_agent(display_peer);
+    CHECK(first.session->usesDisplaySession);
+    CHECK(registry.register_agent(display_peer).binding() == first.binding());
+    auto direct_peer = display_peer;
+    direct_peer.usesDisplaySession = false;
+    bool rejected = false;
+    try {
+        static_cast<void>(registry.register_agent(direct_peer));
+    } catch(const std::runtime_error&) {
+        rejected = true;
+    }
+    CHECK(rejected);
+
+    const auto request_id = interactions.begin(
+        first, UserInteractionOperation::get_assertion, "example.com"
+    );
+    CHECK(interactions.transition(first, request_id, UserInteractionState::presence_required));
+    CHECK(registry.invalidate_if_current(first));
+    interactions.clear_for(first);
+    CHECK(!registry.current_context());
+    CHECK(!interactions.current());
+    CHECK(interactions.wait_for_presence(
+        first, request_id, {}, std::chrono::seconds(1)
+    ) == vauth::dbus::PresenceWaitResult::invalidated);
+    rejected = false;
+    try {
+        interactions.respond_to_presence(first, request_id, true);
+    } catch(const std::runtime_error&) {
+        rejected = true;
+    }
+    CHECK(rejected);
+
+    const auto replacement = registry.register_agent(display_peer);
+    CHECK(replacement.session->generation != first.session->generation);
+    CHECK(!registry.invalidate_if_current(first));
+    CHECK(registry.is_current(replacement));
+    return true;
+}
+
 bool test_wait_for_registration() {
     vauth::dbus::AgentRegistry registry;
     std::jthread registrar([&] {
@@ -797,6 +841,7 @@ int main() {
     test_support::Runner runner;
     runner.run("test_registration_lifetime", test_registration_lifetime);
     runner.run("test_invalid_identity_rejected", test_invalid_identity_rejected);
+    runner.run("test_display_binding_and_stale_invalidation", test_display_binding_and_stale_invalidation);
     runner.run("test_wait_for_registration", test_wait_for_registration);
     runner.run("test_state_names", test_state_names);
     runner.run("test_interaction_lifecycle", test_interaction_lifecycle);

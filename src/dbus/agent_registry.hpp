@@ -17,6 +17,7 @@ struct AgentPeer {
     std::string userName;
     std::string sessionId;
     std::string busName;
+    bool usesDisplaySession = false;
 };
 
 // Holds the single active local UI agent. The D-Bus adapter validates peer and
@@ -25,6 +26,7 @@ class AgentRegistry {
 public:
     [[nodiscard]] UserContext register_agent(AgentPeer peer);
     [[nodiscard]] bool unregister_agent(std::string_view bus_name);
+    [[nodiscard]] bool invalidate_if_current(const UserContext& context);
     [[nodiscard]] std::optional<UserContext> current_context() const;
     [[nodiscard]] std::optional<UserContext> wait_for_current(
         std::chrono::steady_clock::duration timeout

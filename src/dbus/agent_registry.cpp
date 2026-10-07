@@ -13,6 +13,7 @@ bool same_peer(const UserContext& context, const AgentPeer& peer) {
         context.name == peer.userName &&
         context.session &&
         context.session->sessionId == peer.sessionId &&
+        context.session->usesDisplaySession == peer.usesDisplaySession &&
         context.session->interactionAgentId == peer.busName;
 }
 
@@ -55,7 +56,8 @@ UserContext AgentRegistry::register_agent(AgentPeer peer) {
         .session = UserSessionContext{
             .sessionId = std::move(peer.sessionId),
             .interactionAgentId = std::move(peer.busName),
-            .generation = nextGeneration_++
+            .generation = nextGeneration_++,
+            .usesDisplaySession = peer.usesDisplaySession
         }
     };
     UserContext result = *current_;
@@ -73,6 +75,14 @@ bool AgentRegistry::unregister_agent(std::string_view bus_name) {
     ) {
         return false;
     }
+    current_.reset();
+    return true;
+}
+
+bool AgentRegistry::invalidate_if_current(const UserContext& context) {
+    std::lock_guard lock(mutex_);
+    if(!current_ || current_->binding() != context.binding())
+        return false;
     current_.reset();
     return true;
 }

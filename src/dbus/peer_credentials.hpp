@@ -13,13 +13,18 @@ struct AuthenticatedBusPeer {
     std::string uniqueName;
 };
 
+struct AgentLoginSession {
+    std::string id;
+    bool usesDisplaySession = false;
+};
+
 [[nodiscard]] AuthenticatedBusPeer authenticate_bus_peer(
     const sdbus::MethodCall& call
 );
 
-[[nodiscard]] std::string login_session_for_bus_peer(
+[[nodiscard]] AgentLoginSession login_session_for_bus_peer(
     sdbus::IConnection& connection,
-    pid_t pid
+    const AuthenticatedBusPeer& peer
 );
 
 }

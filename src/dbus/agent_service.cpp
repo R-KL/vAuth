@@ -39,6 +39,7 @@ namespace {
 
 constexpr std::size_t MAX_ACCOUNT_BUFFER_SIZE = 1024 * 1024;
 constexpr auto AGENT_STARTUP_GRACE = std::chrono::seconds(2);
+constexpr int SESSION_CHECK_INTERVAL_MS = 250;
 #ifdef DEBUG
 void log_dbus(std::string_view message) noexcept {
     vauth::log::debug(vauth::log::Color::magenta, message);
@@ -119,25 +120,26 @@ AgentPeer resolve_peer(
     if(static_cast<uintmax_t>(uid) > std::numeric_limits<uint32_t>::max())
         throw std::runtime_error("Agent UID is out of range");
 
-    std::string session = login_session_for_bus_peer(
+    AgentLoginSession session = login_session_for_bus_peer(
         connection,
-        authenticated.pid
+        authenticated
     );
-    vauth::require_active_local_session(session, uid);
     return {
         .uid = static_cast<uint32_t>(uid),
         .userName = username_for_uid(uid),
-        .sessionId = std::move(session),
-        .busName = std::move(authenticated.uniqueName)
+        .sessionId = std::move(session.id),
+        .busName = std::move(authenticated.uniqueName),
+        .usesDisplaySession = session.usesDisplaySession
     };
 }
 
 bool session_is_still_active(const UserContext& context) noexcept {
     if(!context.session)
         return false;
-    return vauth::is_active_local_session(
+    return vauth::is_agent_session_current(
         context.session->sessionId,
-        static_cast<uid_t>(context.uid)
+        static_cast<uid_t>(context.uid),
+        context.session->usesDisplaySession
     );
 }
 
@@ -296,9 +298,8 @@ public:
         if(session_is_still_active(*context))
             return context;
 
-        const std::string bus_name = context->session->interactionAgentId;
+        static_cast<void>(registry_.invalidate_if_current(*context));
         interactions_.clear_for(*context);
-        static_cast<void>(registry_.unregister_agent(bus_name));
 #ifdef DEBUG
         log_dbus("D-Bus: discarded inactive user-interaction agent");
 #endif
@@ -314,11 +315,19 @@ public:
             throw std::invalid_argument("Interaction already has a request ID");
         if(!user.session || !registry_.is_current(user))
             return 0;
-        return interactions_.begin(
+        const uint64_t request_id = interactions_.begin(
             user,
             request.operation,
             request.relyingPartyId
         );
+        // Invalidation revokes the generation before clearing interactions.
+        // Recheck after insertion so a concurrent session change cannot leave
+        // a new pending interaction behind its cleanup.
+        if(!registry_.is_current(user)) {
+            interactions_.clear_for(user);
+            return 0;
+        }
+        return request_id;
     }
 
     [[nodiscard]] uint64_t publish_state(
@@ -485,8 +494,8 @@ private:
             throw std::runtime_error("Calling agent registration is stale");
         }
         if(!session_is_still_active(*current)) {
+            static_cast<void>(registry_.invalidate_if_current(*current));
             interactions_.clear_for(*current);
-            static_cast<void>(registry_.unregister_agent(sender));
             throw std::runtime_error("Calling agent session is not active");
         }
         return *current;
@@ -577,10 +586,8 @@ private:
             AgentPeer peer = resolve_peer(*connection_, call);
             if(auto current = registry_.current_context()) {
                 if(!session_is_still_active(*current)) {
+                    static_cast<void>(registry_.invalidate_if_current(*current));
                     interactions_.clear_for(*current);
-                    static_cast<void>(registry_.unregister_agent(
-                        current->session->interactionAgentId
-                    ));
                 }
             }
             const UserContext context = registry_.register_agent(
@@ -621,9 +628,9 @@ private:
             ) {
                 throw std::runtime_error("Calling agent is not registered");
             }
-            interactions_.clear_for(*current);
-            if(!registry_.unregister_agent(sender))
+            if(!registry_.invalidate_if_current(*current))
                 throw std::runtime_error("Calling agent is not registered");
+            interactions_.clear_for(*current);
             call.createReply().send();
 #ifdef DEBUG
             log_dbus("D-Bus: unregistered user-interaction agent");
@@ -643,6 +650,8 @@ private:
 
     void unregister_disconnected_agent(const std::string& bus_name) noexcept {
         const auto current = registry_.current_context();
+        if(!registry_.unregister_agent(bus_name))
+            return;
         if(
             current &&
             current->session &&
@@ -650,8 +659,6 @@ private:
         ) {
             interactions_.clear_for(*current);
         }
-        if(!registry_.unregister_agent(bus_name))
-            return;
 #ifdef DEBUG
         log_dbus("D-Bus: user-interaction agent disconnected");
 #endif
@@ -733,11 +740,15 @@ private:
                 };
 
                 int poll_result;
+                const int bus_timeout = bus.getPollTimeout();
+                const int timeout = bus_timeout < 0
+                    ? SESSION_CHECK_INTERVAL_MS
+                    : std::min(bus_timeout, SESSION_CHECK_INTERVAL_MS);
                 do {
                     poll_result = poll(
                         descriptors.data(),
                         count,
-                        bus.getPollTimeout()
+                        timeout
                     );
                 } while(poll_result < 0 && errno == EINTR);
                 if(poll_result < 0) {
@@ -755,6 +766,14 @@ private:
 
                 while(connection_->processPendingEvent()) {
                 }
+                // Session changes must also cancel an interaction while the
+                // worker is blocked waiting for user input.
+                if(auto current = registry_.current_context()) {
+                    if(!session_is_still_active(*current)) {
+                        static_cast<void>(registry_.invalidate_if_current(*current));
+                        interactions_.clear_for(*current);
+                    }
+                }
                 send_queued_events();
             }
         } catch(const std::exception& error) {
@@ -770,10 +789,8 @@ private:
             failure_ = std::move(message);
         }
         if(auto context = registry_.current_context()) {
+            static_cast<void>(registry_.invalidate_if_current(*context));
             interactions_.clear_for(*context);
-            static_cast<void>(registry_.unregister_agent(
-                context->session->interactionAgentId
-            ));
         }
 #ifdef DEBUG
         log_dbus("D-Bus: service event loop stopped");

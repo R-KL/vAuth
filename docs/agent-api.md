@@ -40,12 +40,26 @@ authenticated operating-system and D-Bus data; the agent supplies none of
 them.
 
 Registration succeeds only for an active, local, non-remote logind session.
+Directly associated agents must belong to a session of class `user`. Desktop
+applications launched by the systemd user manager may instead have no direct
+session, or belong to a session of class `manager`. Only these cases use a
+fallback: the daemon resolves the authenticated PID with logind's
+`GetUserByPID`, checks the returned UID against the authenticated bus UID, and
+binds the agent to that user's primary display session. That session must have
+class `user`, type `wayland` or `x11`, a local seat, and be active and non-remote.
+A failed, inactive, remote, or foreign direct login is never redirected to
+another session. Other logind errors fail registration.
 There is one agent globally. The first eligible caller remains registered until
 it unregisters, disconnects, or its session stops being active. Another caller
 receives `org.lamellix.vAuth.Error.RegistrationFailed`. Repeating registration
 on the same connection is idempotent while its binding remains current.
 
 The generation is bound to the registered unique bus name and login session.
+For user-manager agents it is also bound to the primary display selection.
+The daemon polls session validity every 250 ms while idle and checks it before
+accepting interaction replies; logout, inactivity, or a changed display binding
+clears the registration and cancels pending interaction. Re-registration is
+required to bind to another session.
 Keep it for all replies. Reconnection or a new registration creates a new
 binding; events and replies from an older generation are stale.
 
@@ -232,6 +246,16 @@ bundled vAuth UI. Therefore every process able to register from that session is
 inside the interaction-agent trust boundary. A hostile process can race to
 register, approve or deny presence, suppress the intended UI, or present a
 deceptive secret prompt.
+
+This boundary also includes processes managed by the same user's systemd user
+manager while that user has an eligible active local graphical login. Such
+processes are shared across the user's logins; logind cannot prove which login
+initiated their work. An SSH client able to control that user's user manager
+may therefore launch an eligible agent, although an agent directly associated
+with a remote login is rejected. The fallback does not establish physical
+presence or authenticate the UI executable, and accepts neither a caller-supplied
+session nor arbitrary same-UID system services. No eligible local display means
+registration fails, including for lingering user managers after logout.
 
 Deployments that do not accept that boundary must narrow the system-bus policy
 or add an authorization mechanism. Version 1 is also globally single-agent and

@@ -218,6 +218,17 @@ to register from an eligible login session is inside the documented interaction
 trust boundary. The daemon does not treat the bundled UI executable as a
 special identity.
 
+GNOME and other desktops can launch agents under the systemd user manager.
+When logind reports a manager session or no direct session, the daemon resolves
+the authenticated PID's logind user and verifies its UID before binding to the
+user's active local primary graphical session. The registration retains that
+display binding and is revoked when it changes or stops being eligible.
+User-manager processes are shared across a user's logins and are therefore also
+inside the interaction-agent trust boundary; an SSH client that can control
+the same user manager can launch an eligible agent. Direct remote or inactive
+login sessions and unrelated same-UID services remain ineligible. See the
+[agent API trust model](docs/agent-api.md#trust-model) for the complete rules.
+
 Secrets cross D-Bus only through a bounded, one-shot pipe descriptor. The UI
 must clear its field and buffers after submission. The daemon and verifier use
 move-only sensitive buffers and clear them after consumption.

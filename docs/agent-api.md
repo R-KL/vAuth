@@ -102,6 +102,11 @@ request ID; late UI callbacks must not send a reply for it. Agents must reject
 zero prompt IDs for `secret_required`, nonzero prompt IDs for other states, and
 stale or duplicate prompt IDs.
 
+The current daemon issues request IDs and prompt IDs in increasing order,
+without reuse during its lifetime. Agents can retain the highest accepted IDs
+to reject replays without an unbounded history. A daemon restart changes its
+unique bus owner and requires a new registration; discard the old binding.
+
 `message` is valid UTF-8, contains no control characters, and is at most 512
 bytes. It is presentation text only and never proves that verification
 succeeded.

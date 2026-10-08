@@ -18,6 +18,18 @@ VAUTH_SLINT_DIR to the directory containing SlintConfig.cmake, for example:
   VAUTH_SLINT_DIR=/opt/slint-static/lib/cmake/Slint \
     packaging/debian/vauth-0.1.0/build-local.sh
 
+For a local version override, also set VAUTH_DEB_VERSION:
+
+  VAUTH_DEB_VERSION=0.1.0-2+local1 \
+    VAUTH_SLINT_DIR=/opt/slint-static/lib/cmake/Slint \
+    packaging/debian/vauth-0.1.0/build-local.sh
+
+Use a complete Debian package version, including the Debian revision if needed.
+The builder validates it and changes only the temporary debian/changelog, so
+all generated binary packages (including debug-symbol packages), buildinfo,
+and changes metadata share that version. The checkout's changelog is unchanged.
+When VAUTH_DEB_VERSION is unset or empty, the checked-in version is used.
+
 Slint is intentionally not listed as a Debian Build-Depends while no suitable
 Debian package exists. Consequently this initial packaging is suitable for
 local beta packages and a controlled project repository, but it is not yet a

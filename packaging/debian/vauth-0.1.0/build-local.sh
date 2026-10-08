@@ -27,7 +27,7 @@ if [ ! -f "$slint_version_file" ] || \
     exit 2
 fi
 
-for command_name in dpkg-buildpackage dpkg-parsechangelog git grep lintian tar; do
+for command_name in dpkg dpkg-buildpackage dpkg-parsechangelog git grep lintian sed tar; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
         echo "Required command is missing: $command_name" >&2
         exit 2
@@ -39,10 +39,15 @@ if [ -n "$(git -C "$repository_root" status --porcelain --untracked-files=normal
     exit 2
 fi
 
-package_version=$(dpkg-parsechangelog \
+package_version=${VAUTH_DEB_VERSION:-$(dpkg-parsechangelog \
     -l"$script_directory/changelog" \
-    -SVersion)
-upstream_version=${package_version%-*}
+    -SVersion)}
+if ! dpkg --validate-version "$package_version"; then
+    echo "VAUTH_DEB_VERSION must be a valid Debian package version" >&2
+    exit 2
+fi
+upstream_version=${package_version#*:}
+upstream_version=${upstream_version%-*}
 
 workspace=$(mktemp -d "${TMPDIR:-/tmp}/vauth-debian.XXXXXX")
 cleanup() {
@@ -57,6 +62,10 @@ git -C "$repository_root" archive --format=tar HEAD |
 cp -a \
     "$source_directory/packaging/debian/vauth-0.1.0" \
     "$source_directory/debian"
+if [ -n "${VAUTH_DEB_VERSION:-}" ]; then
+    sed -i "1s/^vauth ([^)]*)/vauth ($package_version)/" \
+        "$source_directory/debian/changelog"
+fi
 
 export VAUTH_SLINT_DIR
 (

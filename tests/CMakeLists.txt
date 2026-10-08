@@ -335,6 +335,18 @@ add_test(
         ${CMAKE_INSTALL_DOCDIR}
 )
 
+find_program(DPKG_EXECUTABLE dpkg)
+find_program(DPKG_PARSECHANGELOG_EXECUTABLE dpkg-parsechangelog)
+find_program(GIT_EXECUTABLE git)
+if(DPKG_EXECUTABLE AND DPKG_PARSECHANGELOG_EXECUTABLE AND GIT_EXECUTABLE)
+    add_test(
+        NAME debian_build_local
+        COMMAND bash
+            ${CMAKE_CURRENT_SOURCE_DIR}/debian_build_local_test.sh
+            ${PROJECT_SOURCE_DIR}
+    )
+endif()
+
 find_program(SYSTEMD_ANALYZE_EXECUTABLE systemd-analyze)
 if(SYSTEMD_ANALYZE_EXECUTABLE)
     add_test(

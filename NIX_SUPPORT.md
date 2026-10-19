@@ -59,6 +59,7 @@ If you made the flake.nix or you already have a flake.nix just do the following.
 - Add `vauth.url = "github:R-KL/vAuth/feature/nixos-support";` inside the inputs 
 - Add `vauth.nixosModules.default` has one of the modules
 - Add  `{ services.vauth.enable = true; }` has one of the modules
+- Add `vauth` to the output
 
 then your flake should look like this (compared to example flake
 )
@@ -68,7 +69,7 @@ then your flake should look like this (compared to example flake
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-<version>";
     vauth.url = "github:R-KL/vAuth/feature/nixos-support"; # Add this
   };
-  outputs = { self, nixpkgs, vauth, ... }:
+  outputs = { self, nixpkgs, vauth, ... }: # Add vauth here
   let 
     system="x86_64-linux"; 
   in

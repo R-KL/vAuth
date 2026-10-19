@@ -1,5 +1,10 @@
 # NixOS and Nix support
 
+
+> [!WARNING]
+> The following steps worked on my system but not necessarily on other systems, a better flake is in WIP!
+
+
 This repo is identical the main repo, except the addition of three files
 - `flake.nix`: used to build the vAuth binary on any distro using nix package manager.
 - `module.nix`:essentially part of flake.nix that handles the NixOS integration.
@@ -79,7 +84,14 @@ then your flake should look like this (compared to example flake
       modules = [ 
         ./configuration.nix
         vauth.nixosModules.default # Add this 
-        { services.vauth.enable = true; } # Add this
+        {
+          services.vauth.enable = true; # enables vauth
+          security.tpm2.enable = true; # enables the TPM module
+          security.tpm2.fapi = {
+              tcti = "device:/dev/tpmrm0"; # make sure this is your TMP module path, most devices only have one and this works
+              ekCertLess = true; # Needed incase endorsement-key certificate lookup returns false, try building without it, and if it works then done include it again
+          };
+        } # Add this
       ];
     };
   };
@@ -90,9 +102,34 @@ then your flake should look like this (compared to example flake
 Then rebuild your system using
 
 ```bash
+sudo nixos-rebuild build
+```
+Now if it completes successfully (it should, else please open up an issue in github) next before we start the process we have to configure the TMP.
+
+```bash
+nix-shell -p tpm2-tools
+```
+
+Next, we must provision FAPI using
+
+```bash
+sudo tss2_provision
+```
+Next we turn switch to our newly built system
+
+```bash
 sudo nixos-rebuild switch
 ```
 
+This should give a vauthd not starting up error, but it can be ignored. its because vauth credentials hasnt been provisioned yet. We can do that using
+
+```bash
+sudo vauthctl provision
+```
+Just switch again
+```bash
+sudo nixos-rebuild switch
+```
 That's it. Next follow the instructions in the README.md file before running the binaries provided by vAuth.
 
 ## For Nix users.

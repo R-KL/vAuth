@@ -108,6 +108,7 @@ nix build 'github:R-KL/vAuth/feature/nixos-support#vauth'
 
 > [!NOTE]
 > In the build link depends on where the file is hosted! It should be changed to correspoding url when merging. ie `R-KL/vAuth` if I merged to main repo
+
 The packages etc are pinned, hence the compilation and build process will be sucessful.
 
 > Advantage of using nix build instead of CMAKE is that it handles the process of downloading slint-UI, generating the CMake build script using ninja and building efforlessly, it also installed all the dependencies, and completes the entire process in one command, which is given above. Cmake is used internally to build.

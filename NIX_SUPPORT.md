@@ -56,7 +56,7 @@ sudo nix flake check
 If you made the flake.nix or you already have a flake.nix just do the following....
 
 
-- Add `vauth.url = "github:R-KL/vAuth";` inside the inputs 
+- Add `vauth.url = "github:R-KL/vAuth/feature/nixos-support";` inside the inputs 
 - Add `vauth.nixosModules.default` has one of the modules
 - Add  `{ services.vauth.enable = true; }` has one of the modules
 
@@ -65,8 +65,8 @@ then your flake should look like this (compared to example flake
 ```nix
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
-    vauth.url = "github:R-KL/vAuth";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-<version>";
+    vauth.url = "github:R-KL/vAuth/feature/nixos-support"; # Add this
   };
   outputs = { self, nixpkgs, vauth, ... }:
   let 
@@ -77,8 +77,8 @@ then your flake should look like this (compared to example flake
       inherit system;
       modules = [ 
         ./configuration.nix
-        vauth.nixosModules.default
-        { services.vauth.enable = true; }
+        vauth.nixosModules.default # Add this 
+        { services.vauth.enable = true; } # Add this
       ];
     };
   };
@@ -89,7 +89,7 @@ then your flake should look like this (compared to example flake
 Then rebuild your system using
 
 ```bash
-sudo nixos-rebuild switch --flake .#nixos
+sudo nixos-rebuild switch
 ```
 
 That's it. Next follow the instructions in the README.md file before running the binaries provided by vAuth.
@@ -107,8 +107,8 @@ nix build 'github:R-KL/vAuth/feature/nixos-support#vauth'
 ```
 
 > [!NOTE]
-> In the build link depends on where the file is hosted! It should be changed to correspoding url when merging. ie `R-KL/vAuth` if I merged to main repo
-
+> In the above code, the github link depends on where the file is hosted! It should be changed to correspoding url when merging. example, lets say its hosted in my feature branch feature/nixos-support, then it should be like shown above. But if I moved it to my main repo, it would be `github:R-KL/vAuth#vauth` if I merged to main repo
+s
 The packages etc are pinned, hence the compilation and build process will be sucessful.
 
 > Advantage of using nix build instead of CMAKE is that it handles the process of downloading slint-UI, generating the CMake build script using ninja and building efforlessly, it also installed all the dependencies, and completes the entire process in one command, which is given above. Cmake is used internally to build.

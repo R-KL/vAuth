@@ -19,7 +19,7 @@ For example  if you dont have a flake.nix file, create one in the same directory
 
 ```bash
 cd /etc/nixos
-sudo vi flake.nix
+sudo nano flake.nix
 ```
 then paste this below
 
